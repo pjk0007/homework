@@ -171,7 +171,6 @@ void sendARPRequest(char* id) { // Make ARP Contents and call sendFrame
 	struct myarp_header* mah;
 	int size = sizeof(struct myarp_header) + strlen(id);
 	mah = (struct myarp_header*)malloc(size); // Allocate memory for ARP Contents
-
 	// ! Fill the mah with ARP Contents (Identifier, DST is all 0, identifier length..) !
 	mah->len = strlen(id);
 	strcpy(mah->ethAddr, "000000");
@@ -189,6 +188,7 @@ struct registered_dst* waitARPReply(char* id) {
 
 	while (1) {
 		received = recv(sock_ll, buffer, 1500, 0);
+		printf("received data : %s\n",buffer);
 		eh = (struct eth_header*)buffer;
 		if (eh->etherType != htons(0xFFFE))
 			continue;
@@ -257,13 +257,14 @@ void sendFrame(unsigned char* dst, unsigned short type, unsigned char* data, int
 	eh = (struct eth_header*)msgbuf_wrptr;
 
 	// ! Build ethernet header part of frame and frame payload. !
-	strcpy(eh->destaddr, dst);
-	strcpy(eh->srcaddr, STATION_ADDR);
-	eh->etherType = type;
+	printf("dst : %s, srcaddr : %s, type : %x data : %s\n", dst, STATION_ADDR, type, data);
+	memcpy(eh->destaddr, dst, 6);
+	memcpy(eh->srcaddr, STATION_ADDR, 6);
+	eh->etherType = htons(type);
 	msgbuf_wrptr += sizeof(*eh);
-	strncpy(msgbuf_wrptr, data, len);
+	memcpy(msgbuf_wrptr, data, len);
 	msgbuf_wrptr += len;
-
+	printf("sending data : %s\n", msgbuf);
 	bytes = send(sock_ll, msgbuf, (int)(msgbuf_wrptr - msgbuf), 0);
 	free(msgbuf);
 }
