@@ -1,0 +1,61 @@
+dispatchReceivedFrame (ptr)
+ptr은 전체 ARP가 들어가있다
+ptr에서 header부분을 eh에 집어넣은 후
+ptr자체에는 simpleARP or Message 만 남아있도록 한다.
+그후 eh의 etherType(데이터전달방식)에 따라서 receiveARPFrame 혹은 receiveDataFrame에 ptr(simpleARP or Message)를 집어넣었다.
+이 두 함수는 아마 simpleARP or Message의 분리작업을 할 것으로 예상된다.
+
+receiveARPFrame (dst, arp)
+dst는 데이터를 전송해 준 컴퓨터의 주소가 저장되어있다.
+arp는 전송받은 simpleARP이다.
+receivedID에는 전송받은 arp내부에 존재하는 ID를 넣도록한다.
+전송받은 arp내부의 ID와 현재 구동중인 컴퓨터 ID가 같은지 확인하고 같지 않으면 프로그램을 종료한다.
+같다면 데이터를 전송해준 컴퓨터에게 0xFFFE의 데이터방식을 이용해 mah에 simpleARP를 만들어서 전송하여 올바른 컴퓨터에 접근했다고 알려준다.
+
+receiveARPDataFrame (dst, data)
+dst는 데이터를 전송해 준 컴퓨터의 주소가 저장되어있다.
+0xFFFD의 방식으로 받았을 때 이므로 data에는 Message가 들어있다. (ex : "Hello!")
+data를 출력하고 VM2의 경우는 답장도 해야하므로 sendFrame을 이용해서 "Nice to meet you"를 dst에게 전송한다.
+
+findEntry (id)
+현재까지 접근에 성공한 컴퓨터의 주소와 id는 링크드리스트의 형태로 저장되어있다.
+이 함수는 그 리스트를 확인하여 지금까지 접근했던 리스트에 지금 접근하려는 컴퓨터의 id가 존재하는지 확인하는 것이다.
+존재하면 그 id의 주소를 반환해준다. 없으면 NULL을 반환.
+
+sendARPRequest (id)
+mah에는 simpleARP를 담아서 해당 id에 0xFFFE형식으로 전송하는 역할이다.
+mah에 simpleARP (상대방 id 길이, 주소, 상대방 id)를 넣는다.
+
+waitARPReply (id)
+waitARPReply함수는 상대에게 0xFFFE로 상대를 확인하고 상대로부터 OK라는 답장이 0xFFFE형식으로 올 것인데 그 때 상대의 주소를 dst_list (링크드리스트)에 저장하는 역할을 한다.
+저장은 리스트 가장 마지막에 붙여넣는다.
+상대로부터 OK답장이 올 때까지 while문안에서 기다린다.
+
+sendFrameTo (id, type, data, len)
+- id는 상대 컴퓨터의 id
+- type은 0xFFFE, 0xFFFD (0xFFFE는 상대 확인 절차, 0xFFFD는 실질적은 메세지)
+- data는 simpleARP or Message
+- len 은 data의 길이
+
+먼저 dst_list에 지금까지 접속했던 컴퓨터의 id와 보내려는 id가 일치하는 것이 있는지 확인한다.
+1. 없다면 해당 id의 컴퓨터에 sendARPRequest (0xFFFE, simpleARP)를 보내고 waitARPReply한다.(OK싸인이 올때까지 기다린다.) 상대에게 응답이 오면 상대방의 정보를 entry에 저장하다. (주소)
+
+2. 상대 id에 접속한 적이 있거나 OK싸인을 받으면 상대방의 주소 정보가 entry에 저장되어 있다. 그 주소에 sendFrame한다. sendFrame은 아래 자세히 서술하겠지만 해당 type(0xFFFE or 0xFFFD)으로 data(simpleARP or Message)를 전송하는 함수가 될 것이다.
+
+
+sendFrame (dst, type, data, len)
+- id는 상대 컴퓨터의 id
+- type은 0xFFFE, 0xFFFD (0xFFFE는 상대 확인 절차, 0xFFFD는 실질적은 메세지)
+- data는 simpleARP or Message
+- len 은 data의 길이
+
+msgbuf가 가르키는 것이 총 ARP이다.
+msgbuf(dst_addr, src_addr, Ethertype, data)
+msgbuf_wrptr은 msgbuf에 ARP내용을 쓸때 필요한 커서의 역할로 msgbuf에 모든 ARP내용를 썼다면 msgbuf_wrptr은 msgbuf내용물의 다음을 가르킨다.
+그래서 msgbuf_wrptr - msgbuf를 하면 msgbuf에서 실질적인 ARP내용물의 길이가 된다.
+이 것을 send함수를 이용하여 상대방에게 보낸다.
+socket ("상대방의socket discripter", APR내용, ARP내용의 길이, 0);
+이 되는 것이다.
+
+init_socket
+이 함수는 socket을 초기화 시켜서 그 소켓의 discripter를 반환한다.
