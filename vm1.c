@@ -236,7 +236,6 @@ void sendFrame(unsigned char* dst, unsigned short type, unsigned char* data, int
 	int msgLength = 0;
 	int bytes = 0;
 	struct eth_header* eh;
-	struct mrpdu* mrp;
 
 	msgbuf = (unsigned char*)malloc(2000);
 	if (msgbuf == NULL) {
