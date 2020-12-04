@@ -128,9 +128,9 @@ void receiveARPFrame(unsigned char* dst, unsigned char* arp) {
 	printf("ARP Received from %x:%x:%x:%x:%x:%x.\n", dst[0], dst[1], dst[2], dst[3], dst[4], dst[5]);
 
 	// ! Allocate memory for receivedId. Size is received identifier length + 1. !
-	receivedId = malloc(sizeof(name) + 1);
+	receivedId = malloc(ra->len + 1);
 	// ! Get ReceivedID from received packets !
-	strcpy(receivedId, arp);
+	memcpy(receivedId, arp, ra->len);
 	// ! When you get the receivedId, ID String must have NULL value at last for proper operation of strcmp. !
 	receivedId[sizeof(receivedId) - 1] = NULL;
 
@@ -142,8 +142,8 @@ void receiveARPFrame(unsigned char* dst, unsigned char* arp) {
 	mah = (struct myarp_header*)malloc(size);
 	// ! Make ARP Reply. Fill identifier length, identifier and the ethernet_address field of ARP Reply with its MAC Address(STATION_ADDR). !
 	mah->len = strlen(name);
-	strcpy(mah->ethAddr, STATION_ADDR);
-	strcpy(mah->data , receivedId);	
+	memcpy(mah->ethAddr, STATION_ADDR, 6);
+	memcpy(mah->data , receivedId, mah->len);	
 
 	sendFrame(dst, 0xFFFE, (unsigned char*)mah, size);
 }
@@ -173,7 +173,9 @@ void sendARPRequest(char* id) { // Make ARP Contents and call sendFrame
 	mah = (struct myarp_header*)malloc(size); // Allocate memory for ARP Contents
 	// ! Fill the mah with ARP Contents (Identifier, DST is all 0, identifier length..) !
 	mah->len = strlen(id);
-	strcpy(mah->ethAddr, "000000");
+	for(int i=0;i<6;i++){
+		mah->ethAddr[i] = NULL;
+	}
 	strcpy(mah->data, id);
 
 	sendFrame(BROADCAST_ADDR, 0xFFFE, (unsigned char*)mah, size);
@@ -185,25 +187,26 @@ struct registered_dst* waitARPReply(char* id) {
 	char* receivedId;
 	struct eth_header* eh;
 	struct myarp_header* mah;
-
 	while (1) {
 		received = recv(sock_ll, buffer, 1500, 0);
-		printf("received data : %s\n",buffer);
+		printf("\nreceived data : ");
+		for(int i = 0 ;i< 29; i ++){
+			printf("%02x", buffer[i]);
+		}
+		printf("\n");
 		eh = (struct eth_header*)buffer;
 		if (eh->etherType != htons(0xFFFE))
 			continue;
-
 		mah = (struct myarp_header*)(buffer + sizeof(struct eth_header));
 		// mah is pointing arp contents starting pointer.
 
-		
 		// ! Allocate memory for receivedId. Size is received identifier length + 1. !
-		receivedId = malloc(mah->len + 1);
+		receivedId = malloc((mah->len) + 1);
 		// ! Parse received arp contents (receivedId, ethernet_address of peer, identifier length..) !
-		strncpy(receivedId, mah->data, mah->len);
+		memcpy(receivedId, mah->data, mah->len);
 		// ! When you get the receivedId, ID String must have NULL value at last for proper operation of strcmp. !
-		receivedId[sizeof(receivedId) - 1] = NULL;
-
+		receivedId[mah->len] = NULL;
+		printf("receivedId : %s, id : %s\n", receivedId, id);
 		if (!strcmp(receivedId, id)) {
 			struct registered_dst* ptr;
 			struct registered_dst* newEntry;
@@ -217,7 +220,7 @@ struct registered_dst* waitARPReply(char* id) {
 			newEntry = (struct registered_dst*)malloc(sizeof(struct registered_dst));
 			// ! Make newEntry using parsed ARP contents and link it to arp cache !
 			newEntry->id = receivedId;
-			strcpy(newEntry->dst, mah->ethAddr);
+			memcpy(newEntry->dst, mah->ethAddr, 6);
 			newEntry->next = NULL;
 			ptr->next = newEntry;
 
@@ -257,14 +260,14 @@ void sendFrame(unsigned char* dst, unsigned short type, unsigned char* data, int
 	eh = (struct eth_header*)msgbuf_wrptr;
 
 	// ! Build ethernet header part of frame and frame payload. !
-	printf("dst : %s, srcaddr : %s, type : %x data : %s\n", dst, STATION_ADDR, type, data);
 	memcpy(eh->destaddr, dst, 6);
 	memcpy(eh->srcaddr, STATION_ADDR, 6);
 	eh->etherType = htons(type);
-	msgbuf_wrptr += sizeof(*eh);
+
+	msgbuf_wrptr += sizeof(struct eth_header);
 	memcpy(msgbuf_wrptr, data, len);
 	msgbuf_wrptr += len;
-	printf("sending data : %s\n", msgbuf);
+
 	bytes = send(sock_ll, msgbuf, (int)(msgbuf_wrptr - msgbuf), 0);
 	free(msgbuf);
 }
