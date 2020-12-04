@@ -48,11 +48,7 @@ struct registered_dst {
 int sock_ll;
 char* interface;
 int init_socket(unsigned short ethr_type, int* sock_ll_ptr);
-struct registered_dst* waitARPReply(char* vm_id);
-void sendARPRequest(char* id);
-void sendFrameTo(char* id, unsigned short ethr_type, unsigned char* data, int len);
 void sendFrame(unsigned char* dst_mac, unsigned short ether_type, unsigned char* data, int len);
-struct registered_dst* findEntry(char* id);
 void dispatchReceivedFrame(unsigned char* buff_ptr);
 void receiveARPFrame(unsigned char* dst_mac, unsigned char* arp_packet);
 void receiveDataFrame(unsigned char* dst_mac, unsigned char* data_packet);
@@ -76,22 +72,10 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 
-	/* !!!! VM1 main code !!!! */
-	//sendFrameTo(target, 0xFFFD, "Hi Hello AnnyeongHaSeYo !!!!!!!Enter your student code!!!!!!!", strlen("Hi Hello AnnyeongHaSeYo !!!!!!!Enter your student code!!!!!!!")); // When you write your student code, delete !!!!!!!!
-
-	//received = recv(sock_ll, buffer, 1500, 0);
-	//dispatchReceivedFrame(buffer);
-	//sendFrameTo(target, 0xFFFD, "I'm Glad to meet you again.", strlen("I'm Glad to meet you again."));
-
-	//received = recv(sock_ll, buffer, 1500, 0);
-	//dispatchReceivedFrame(buffer);
-
 
 	/* !!!! VM2 main code !!!! */
 	while (1) {
-		printf("before receive\n");
 		received = recv(sock_ll, buffer, 1500, 0);
-		printf("received data : %s\n", buffer);
 		dispatchReceivedFrame(buffer);
 	}
 
@@ -110,11 +94,9 @@ void dispatchReceivedFrame(unsigned char* ptr) {
 
 	switch (receivedEtherType) {
 	case 0xFFFE:
-		printf("FFFE\n");
 		receiveARPFrame(eh->srcaddr, ptr);
 		break;
 	case 0xFFFD:
-		printf("FFFD\n");
 		receiveDataFrame(eh->srcaddr, ptr);
 		break;
 	default:
@@ -134,7 +116,7 @@ void receiveARPFrame(unsigned char* dst, unsigned char* arp) {
 	// ! Allocate memory for receivedId. Size is received identifier length + 1. !
 	receivedId = malloc(ra->len + 1);
 	// ! Get ReceivedID from received packets !
-	strcpy(receivedId, ra->data);
+	memcpy(receivedId, ra->data, ra->len);
 	// ! When you get the receivedId, ID String must have NULL value at last for proper operation of strcmp. !
 	receivedId[sizeof(receivedId) - 1] = NULL;
 
@@ -146,8 +128,8 @@ void receiveARPFrame(unsigned char* dst, unsigned char* arp) {
 	mah = (struct myarp_header*)malloc(size);
 	// ! Make ARP Reply. Fill identifier length, identifier and the ethernet_address field of ARP Reply with its MAC Address(STATION_ADDR). !
 	mah->len = strlen(name);
-	strcpy(mah->ethAddr, STATION_ADDR);
-	strcpy(mah->data , receivedId);	
+	memcpy(mah->ethAddr, STATION_ADDR, 6);
+	memcpy(mah->data , receivedId, mah->len);	
 
 	sendFrame(dst, 0xFFFE, (unsigned char*)mah, size);
 }
@@ -158,90 +140,6 @@ void receiveDataFrame(unsigned char* dst, unsigned char* data) {
 	sendFrame(dst, 0xFFFD, "Nice to meet you!\n", strlen("Nice to meet you!\n"));
 }
 
-struct registered_dst* findEntry(char* id) {
-	struct registered_dst* ptr;
-	for (ptr = dst_list.next; ptr != NULL; ptr = ptr->next) {
-		if (!strcmp(id, ptr->id)) {
-			printf("Finding Entry Success\n");
-			return ptr;
-		}
-	}
-
-	printf("Failed to find entry.\n");
-	return NULL;
-}
-
-void sendARPRequest(char* id) { // Make ARP Contents and call sendFrame
-	struct myarp_header* mah;
-	int size = sizeof(struct myarp_header) + strlen(id);
-	mah = (struct myarp_header*)malloc(size); // Allocate memory for ARP Contents
-
-	// ! Fill the mah with ARP Contents (Identifier, DST is all 0, identifier length..) !
-	mah->len = strlen(id);
-	strcpy(mah->ethAddr, "000000");
-	strcpy(mah->data, id);
-
-	sendFrame(BROADCAST_ADDR, 0xFFFE, (unsigned char*)mah, size);
-}
-
-struct registered_dst* waitARPReply(char* id) {
-	int received;
-	unsigned char buffer[1500];
-	char* receivedId;
-	struct eth_header* eh;
-	struct myarp_header* mah;
-
-	while (1) {
-		received = recv(sock_ll, buffer, 1500, 0);
-		eh = (struct eth_header*)buffer;
-		if (eh->etherType != htons(0xFFFE))
-			continue;
-
-		mah = (struct myarp_header*)(buffer + sizeof(struct eth_header));
-		// mah is pointing arp contents starting pointer.
-
-		
-		// ! Allocate memory for receivedId. Size is received identifier length + 1. !
-		receivedId = malloc(mah->len + 1);
-		// ! Parse received arp contents (receivedId, ethernet_address of peer, identifier length..) !
-		strncpy(receivedId, mah->data, mah->len);
-		// ! When you get the receivedId, ID String must have NULL value at last for proper operation of strcmp. !
-		receivedId[sizeof(receivedId) - 1] = NULL;
-
-		if (!strcmp(receivedId, id)) {
-			struct registered_dst* ptr;
-			struct registered_dst* newEntry;
-
-			printf("ARP Received. Target MAC Address is %x:%x:%x:%x:%x:%x\n", mah->ethAddr[0], mah->ethAddr[1], mah->ethAddr[2], mah->ethAddr[3], mah->ethAddr[4], mah->ethAddr[5]);
-
-			for (ptr = &dst_list; ptr->next != NULL; ptr = ptr->next) { // Go to last entry of arp cache
-			}
-
-			
-			newEntry = (struct registered_dst*)malloc(sizeof(struct registered_dst));
-			// ! Make newEntry using parsed ARP contents and link it to arp cache !
-			newEntry->id = receivedId;
-			strcpy(newEntry->dst, mah->ethAddr);
-			newEntry->next = NULL;
-			ptr->next = newEntry;
-
-			return newEntry;
-		}
-	}
-	return NULL;
-}
-
-void sendFrameTo(char* id, unsigned short type, unsigned char* data, int len) {
-	struct registered_dst* entry = findEntry(id);
-	printf("Sending Message.. : %s\n", data);
-	if (entry == NULL) {
-		printf("Send ARP..\n");
-		sendARPRequest(id);
-		entry = waitARPReply(id);
-	}
-
-	sendFrame(entry->dst, type, data, len);
-}
 
 void sendFrame(unsigned char* dst, unsigned short type, unsigned char* data, int len) {
 	unsigned char* msgbuf, * msgbuf_wrptr;
@@ -264,8 +162,9 @@ void sendFrame(unsigned char* dst, unsigned short type, unsigned char* data, int
 	memcpy(eh->destaddr, dst, 6);
 	memcpy(eh->srcaddr, STATION_ADDR, 6);
 	eh->etherType = htons(type);
-	msgbuf_wrptr += sizeof(*eh);
-	strncpy(msgbuf_wrptr, data, len);
+
+	msgbuf_wrptr += sizeof(struct eth_header);
+	memcpy(msgbuf_wrptr, data, len);
 	msgbuf_wrptr += len;
 
 	bytes = send(sock_ll, msgbuf, (int)(msgbuf_wrptr - msgbuf), 0);
