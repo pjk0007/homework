@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	/* !!!! VM1 main code !!!! */
-	sendFrameTo(target, 0xFFFD, "Hi Hello AnnyeongHaSeYo !!!!!!!Enter your student code!!!!!!!", strlen("Hi Hello AnnyeongHaSeYo !!!!!!!Enter your student code!!!!!!!")); // When you write your student code, delete !!!!!!!!
+	sendFrameTo(target, 0xFFFD, "Hi Hello AnnyeongHaSeYo 2019160014", strlen("Hi Hello AnnyeongHaSeYo 2019160014")); // When you write your student code, delete !!!!!!!!
 
 	received = recv(sock_ll, buffer, 1500, 0);
 	dispatchReceivedFrame(buffer);
@@ -85,13 +85,6 @@ int main(int argc, char* argv[]) {
 
 	received = recv(sock_ll, buffer, 1500, 0);
 	dispatchReceivedFrame(buffer);
-
-
-	/* !!!! VM2 main code !!!! */
-	// while (1) {
-	//	received = recv(sock_ll, buffer, 1500, 0);
-	//	dispatchReceivedFrame(buffer);
-	// }
 
 	close(sock_ll);
 	return 0;
@@ -150,8 +143,6 @@ void receiveARPFrame(unsigned char* dst, unsigned char* arp) {
 
 void receiveDataFrame(unsigned char* dst, unsigned char* data) {
 	printf("Received Data : %s\n", data);
-	/* !!!! VM2 main code !!!! */
-	//sendFrame(dst, 0xFFFD, "Nice to meet you!\n", strlen("Nice to meet you!\n"));
 }
 
 struct registered_dst* findEntry(char* id) {
@@ -189,14 +180,11 @@ struct registered_dst* waitARPReply(char* id) {
 	struct myarp_header* mah;
 	while (1) {
 		received = recv(sock_ll, buffer, 1500, 0);
-		printf("\nreceived data : ");
-		for(int i = 0 ;i< 29; i ++){
-			printf("%02x", buffer[i]);
-		}
-		printf("\n");
+
 		eh = (struct eth_header*)buffer;
 		if (eh->etherType != htons(0xFFFE))
 			continue;
+
 		mah = (struct myarp_header*)(buffer + sizeof(struct eth_header));
 		// mah is pointing arp contents starting pointer.
 
@@ -205,8 +193,9 @@ struct registered_dst* waitARPReply(char* id) {
 		// ! Parse received arp contents (receivedId, ethernet_address of peer, identifier length..) !
 		memcpy(receivedId, mah->data, mah->len);
 		// ! When you get the receivedId, ID String must have NULL value at last for proper operation of strcmp. !
+		
 		receivedId[mah->len] = NULL;
-		printf("receivedId : %s, id : %s\n", receivedId, id);
+
 		if (!strcmp(receivedId, id)) {
 			struct registered_dst* ptr;
 			struct registered_dst* newEntry;
